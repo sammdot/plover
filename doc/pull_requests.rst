@@ -1,6 +1,5 @@
----------------------
 Making a pull request
----------------------
+=====================
 
 When making a pull request, please include a short summary of the changes
 and a reference to any issue tickets that the PR is intended to solve.
