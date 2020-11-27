@@ -8,6 +8,7 @@ include archlinux/*
 include debian/*
 include debian/source/*
 include doc/*
+include doc/api/*
 include launch.bat
 include launch.sh
 include linux/*
