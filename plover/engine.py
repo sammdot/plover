@@ -88,11 +88,13 @@ class StenoEngine:
     focus
     configure
     lookup
+    suggestions
     quit
     '''.split()
 
-    def __init__(self, config, keyboard_emulation):
+    def __init__(self, config, controller, keyboard_emulation):
         self._config = config
+        self._controller = controller
         self._is_running = False
         self._queue = Queue()
         self._lock = threading.RLock()
@@ -100,7 +102,12 @@ class StenoEngine:
         self._machine_state = None
         self._machine_params = MachineParams(None, None, None)
         self._formatter = Formatter()
-        self._formatter.set_output(self)
+        self._formatter.set_output(Formatter.output_type(
+            self._send_backspaces,
+            self._send_string,
+            self._send_key_combination,
+            self._send_engine_command,
+        ))
         self._formatter.add_listener(self._on_translated)
         self._translator = Translator()
         self._translator.add_listener(log.translation)
@@ -138,7 +145,15 @@ class StenoEngine:
             except Exception:
                 log.error('engine %s failed', func.__name__[1:], exc_info=True)
 
+    def _on_control_message(self, msg):
+        if msg[0] == 'command':
+            self._same_thread_hook(self._execute_engine_command,
+                                   *msg[1:], force=True)
+        else:
+            log.error('ignoring invalid control message: %r', msg)
+
     def _stop(self):
+        self._controller.stop()
         self._stop_extensions(self._running_extensions.keys())
         if self._machine is not None:
             self._machine.stop_capture()
@@ -147,6 +162,7 @@ class StenoEngine:
     def _start(self):
         self._set_output(self._config['auto_start'])
         self._update(full=True)
+        self._controller.start(self._on_control_message)
 
     def _set_dictionaries(self, dictionaries):
         def dictionaries_changed(l1, l2):
@@ -212,11 +228,9 @@ class StenoEngine:
             if self._machine is not None:
                 self._machine.stop_capture()
                 self._machine = None
-            machine_type = config['machine_type']
-            machine_options = config['machine_specific_options']
-            machine_class = registry.get_plugin('machine', machine_type).obj
-            log.info('setting machine: %s', machine_type)
-            self._machine = machine_class(machine_options)
+            machine_class = registry.get_plugin('machine', machine_params.type).obj
+            log.info('setting machine: %s', machine_params.type)
+            self._machine = machine_class(machine_params.options)
             self._machine.set_suppression(self._is_running)
             self._machine.add_state_callback(self._machine_state_callback)
             self._machine.add_stroke_callback(self._machine_stroke_callback)
@@ -272,6 +286,10 @@ class StenoEngine:
             log.info('starting `%s` extension', extension_name)
             try:
                 extension = registry.get_plugin('extension', extension_name).obj(self)
+            except KeyError:
+                # Plugin not installed, skip.
+                continue
+            try:
                 extension.start()
             except Exception:
                 log.error('initializing extension `%s` failed', extension_name, exc_info=True)
@@ -316,10 +334,9 @@ class StenoEngine:
     def _on_machine_state_changed(self, machine_state):
         assert machine_state is not None
         self._machine_state = machine_state
-        machine_type = self._config['machine_type']
-        self._trigger_hook('machine_state_changed', machine_type, machine_state)
+        self._trigger_hook('machine_state_changed', self._machine_params.type, machine_state)
 
-    def _consume_engine_command(self, command):
+    def _consume_engine_command(self, command, force=False):
         # The first commands can be used whether plover has output enabled or not.
         command_name, *command_args = command.split(':', 1)
         command_name = command_name.lower()
@@ -332,7 +349,7 @@ class StenoEngine:
         elif command_name == 'quit':
             self.quit()
             return True
-        if not self._is_running:
+        if not force and not self._is_running:
             return False
         # These commands can only be run when plover has output enabled.
         if command_name == 'suspend':
@@ -345,9 +362,15 @@ class StenoEngine:
             self._trigger_hook('add_translation')
         elif command_name == 'lookup':
             self._trigger_hook('lookup')
+        elif command_name == 'suggestions':
+            self._trigger_hook('suggestions')
         else:
             command_fn = registry.get_plugin('command', command_name).obj
             command_fn(self, command_args[0] if command_args else '')
+        return False
+
+    def _execute_engine_command(self, command, force=False):
+        self._consume_engine_command(command, force=force)
         return False
 
     def _on_stroked(self, steno_keys):
@@ -361,25 +384,25 @@ class StenoEngine:
             return
         self._trigger_hook('translated', old, new)
 
-    def send_backspaces(self, b):
+    def _send_backspaces(self, b):
         if not self._is_running:
             return
         self._keyboard_emulation.send_backspaces(b)
         self._trigger_hook('send_backspaces', b)
 
-    def send_string(self, s):
+    def _send_string(self, s):
         if not self._is_running:
             return
         self._keyboard_emulation.send_string(s)
         self._trigger_hook('send_string', s)
 
-    def send_key_combination(self, c):
+    def _send_key_combination(self, c):
         if not self._is_running:
             return
         self._keyboard_emulation.send_key_combination(c)
         self._trigger_hook('send_key_combination', c)
 
-    def send_engine_command(self, command):
+    def _send_engine_command(self, command):
         suppress = not self._is_running
         suppress &= self._consume_engine_command(command)
         if suppress:

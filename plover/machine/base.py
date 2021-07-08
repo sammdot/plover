@@ -11,15 +11,19 @@ import threading
 
 import serial
 
-from plover import log
+from plover import _, log
 from plover.machine.keymap import Keymap
 from plover.misc import boolean
 
 
-STATE_STOPPED = 'stopped'
-STATE_INITIALIZING = 'initializing'
-STATE_RUNNING = 'connected'
-STATE_ERROR = 'disconnected'
+# i18n: Machine state.
+STATE_STOPPED = _('stopped')
+# i18n: Machine state.
+STATE_INITIALIZING = _('initializing')
+# i18n: Machine state.
+STATE_RUNNING = _('connected')
+# i18n: Machine state.
+STATE_ERROR = _('disconnected')
 
 
 class StenotypeBase:
@@ -190,8 +194,8 @@ class SerialStenotypeBase(ThreadedStenotypeBase):
     def __init__(self, serial_params):
         """Monitor the stenotype over a serial port.
 
-        Keyword arguments are the same as the keyword arguments for a
-        serial.Serial object.
+        The key-value pairs in the <serial_params> dict are the same
+        as the keyword arguments for a serial.Serial object.
 
         """
         ThreadedStenotypeBase.__init__(self)

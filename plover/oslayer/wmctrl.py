@@ -1,16 +1,22 @@
+from plover.oslayer.config import PLATFORM
 
-import sys
 
+if PLATFORM == 'win':
 
-if sys.platform.startswith('win32'):
-
-    from ctypes import windll
+    from ctypes import windll, wintypes
 
     GetForegroundWindow = windll.user32.GetForegroundWindow
+    GetForegroundWindow.argtypes = []
+    GetForegroundWindow.restype = wintypes.HWND
+
     SetForegroundWindow = windll.user32.SetForegroundWindow
+    SetForegroundWindow.argtypes = [
+        wintypes.HWND, # hWnd
+    ]
+    SetForegroundWindow.restype = wintypes.BOOL
 
 
-elif sys.platform.startswith('darwin'):
+elif PLATFORM == 'mac':
 
     from Cocoa import NSWorkspace, NSRunningApplication, NSApplicationActivateIgnoringOtherApps
 
@@ -21,7 +27,7 @@ elif sys.platform.startswith('darwin'):
         target_window = NSRunningApplication.runningApplicationWithProcessIdentifier_(pid)
         target_window.activateWithOptions_(NSApplicationActivateIgnoringOtherApps)
 
-elif sys.platform.startswith('linux'):
+elif PLATFORM in {'linux', 'bsd'}:
 
     from plover.oslayer.xwmctrl import WmCtrl
 

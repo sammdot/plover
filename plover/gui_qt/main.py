@@ -7,21 +7,24 @@ from PyQt5.QtCore import (
     QTimer,
     QTranslator,
     Qt,
+    pyqtRemoveInputHook,
 )
 from PyQt5.QtWidgets import QApplication, QMessageBox
 
-from plover import log
-from plover import __name__ as __software_name__
-from plover import __version__
+from plover import _, __name__ as __software_name__, __version__, log
 from plover.oslayer.keyboardcontrol import KeyboardEmulation
 
 from plover.gui_qt.engine import Engine
-from plover.gui_qt.i18n import get_language, install_gettext
+
+
+# Disable pyqtRemoveInputHook to avoid getting
+# spammed when using the debugger.
+pyqtRemoveInputHook()
 
 
 class Application:
 
-    def __init__(self, config, use_qt_notifications):
+    def __init__(self, config, controller, use_qt_notifications):
 
         # This is done dynamically so localization
         # support can be configure beforehand.
@@ -41,14 +44,15 @@ class Application:
         self._app.setAttribute(Qt.AA_UseHighDpiPixmaps)
 
         # Enable localization of standard Qt controls.
+        log.info('setting language to: %s', _.lang)
         self._translator = QTranslator()
         translations_dir = QLibraryInfo.location(QLibraryInfo.TranslationsPath)
-        self._translator.load('qtbase_' + get_language(), translations_dir)
+        self._translator.load('qtbase_' + _.lang, translations_dir)
         self._app.installTranslator(self._translator)
 
         QApplication.setQuitOnLastWindowClosed(False)
 
-        self._app.engine = self._engine = Engine(config, KeyboardEmulation())
+        self._app.engine = self._engine = Engine(config, controller, KeyboardEmulation())
         # On macOS, quitting through the dock will result
         # in a direct call to `QCoreApplication.quit`.
         self._app.aboutToQuit.connect(self._app.engine.quit)
@@ -85,14 +89,13 @@ def default_excepthook(*exc_info):
     log.error('Qt GUI error', exc_info=exc_info)
 
 
-def main(config):
+def main(config, controller):
     # Setup internationalization support.
-    install_gettext()
     use_qt_notifications = not log.has_platform_handler()
     # Log GUI exceptions that make it back to the event loop.
     if sys.excepthook is sys.__excepthook__:
         sys.excepthook = default_excepthook
-    app = Application(config, use_qt_notifications)
+    app = Application(config, controller, use_qt_notifications)
     code = app.run()
     del app
     return code

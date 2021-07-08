@@ -1,11 +1,16 @@
-import sys
-
 from PyQt5.QtCore import QObject, pyqtSignal
 from PyQt5.QtGui import QIcon
 from PyQt5.QtWidgets import QMessageBox, QSystemTrayIcon
 
-from plover import __name__ as __software_name__
+from plover import _, __name__ as __software_name__
 from plover import log
+from plover.oslayer.config import PLATFORM
+from plover.machine.base import (
+    STATE_STOPPED,
+    STATE_INITIALIZING,
+    STATE_RUNNING,
+    STATE_ERROR,
+)
 
 
 class TrayIcon(QObject):
@@ -70,7 +75,7 @@ class TrayIcon(QObject):
         self._trayicon = QSystemTrayIcon()
         # On OS X, the context menu is activated with either mouse buttons,
         # and activation messages are still sent, so ignore those...
-        if not sys.platform.startswith('darwin'):
+        if PLATFORM != 'mac':
             self._trayicon.activated.connect(self._on_activated)
         if self._context_menu is not None:
             self._trayicon.setContextMenu(self._context_menu)
@@ -100,7 +105,7 @@ class TrayIcon(QObject):
     clicked = pyqtSignal()
 
     def _update_state(self):
-        if self._machine_state not in ('initializing', 'connected'):
+        if self._machine_state not in (STATE_INITIALIZING, STATE_RUNNING):
             state = 'disconnected'
         else:
             state = 'enabled' if self._is_running else 'disabled'
@@ -112,11 +117,14 @@ class TrayIcon(QObject):
             state=_(self._machine_state),
         )
         if self._is_running:
+            # i18n: Tray icon tooltip.
             output_state = _('output is enabled')
         else:
+            # i18n: Tray icon tooltip.
             output_state = _('output is disabled')
         self._trayicon.setIcon(icon)
         self._trayicon.setToolTip(
+            # i18n: Tray icon tooltip.
             'Plover:\n- %s\n- %s' % (output_state, machine_state)
         )
 

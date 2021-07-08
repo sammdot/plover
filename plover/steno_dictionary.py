@@ -62,8 +62,9 @@ class StenoDictionary:
         timestamp = resource_timestamp(filename)
         d = cls()
         d._load(filename)
-        if resource.startswith(ASSET_SCHEME) or \
-           not os.access(filename, os.W_OK):
+        if (cls.readonly or
+            resource.startswith(ASSET_SCHEME) or
+            not os.access(filename, os.W_OK)):
             d.readonly = True
         d.path = resource
         d.timestamp = timestamp
@@ -96,6 +97,7 @@ class StenoDictionary:
         return self._dict.__getitem__(key)
 
     def clear(self):
+        assert not self.readonly
         self._dict.clear()
         self.reverse.clear()
         self.casereverse.clear()
@@ -157,10 +159,10 @@ class StenoDictionary:
         return self.get(key) is not None
 
     def reverse_lookup(self, value):
-        return set(self.reverse[value])
+        return set(self.reverse.get(value, ()))
 
     def casereverse_lookup(self, value):
-        return set(self.casereverse[value])
+        return set(self.casereverse.get(value, ()))
 
     @property
     def _longest_key(self):

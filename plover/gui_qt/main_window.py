@@ -12,9 +12,9 @@ from PyQt5.QtWidgets import (
     QMenu,
 )
 
-from plover import log
+from plover import _, log
 from plover.oslayer import wmctrl
-from plover.oslayer.config import CONFIG_DIR
+from plover.oslayer.config import CONFIG_DIR, PLATFORM
 from plover.registry import registry
 from plover.resource import resource_filename
 
@@ -51,10 +51,14 @@ class MainWindow(QMainWindow, Ui_MainWindow, WindowState):
         edit_menu.addSeparator()
         edit_menu.addMenu(self.dictionaries.menu_AddDictionaries)
         edit_menu.addAction(self.dictionaries.action_EditDictionaries)
+        edit_menu.addMenu(self.dictionaries.menu_SaveDictionaries)
         edit_menu.addAction(self.dictionaries.action_RemoveDictionaries)
         edit_menu.addSeparator()
         edit_menu.addAction(self.dictionaries.action_MoveDictionariesUp)
         edit_menu.addAction(self.dictionaries.action_MoveDictionariesDown)
+        self.dictionaries.setContextMenuPolicy(Qt.CustomContextMenu)
+        self.dictionaries.customContextMenuRequested.connect(
+            lambda p: edit_menu.exec_(self.dictionaries.mapToGlobal(p)))
         # Tray icon.
         self._trayicon = TrayIcon()
         self._trayicon.enable()
@@ -123,7 +127,7 @@ class MainWindow(QMainWindow, Ui_MainWindow, WindowState):
         engine.signal_connect('config_changed', self.on_config_changed)
         engine.signal_connect('machine_state_changed',
             lambda machine, state:
-            self.machine_state.setText(_(state.capitalize()))
+            self.machine_state.setText(state.capitalize())
         )
         self.restore_state()
         # Commands.
@@ -132,6 +136,8 @@ class MainWindow(QMainWindow, Ui_MainWindow, WindowState):
         engine.signal_connect('configure', partial(self._configure, manage_windows=True))
         engine.signal_connect('lookup', partial(self._activate_dialog, 'lookup',
                                                 manage_windows=True))
+        engine.signal_connect('suggestions', partial(self._activate_dialog, 'suggestions',
+                                                     manage_windows=True))
         # Load the configuration (but do not start the engine yet).
         if not engine.load_config():
             self.on_configure()
@@ -141,6 +147,9 @@ class MainWindow(QMainWindow, Ui_MainWindow, WindowState):
         self._configured = False
         self.dictionaries.on_config_changed(config)
         self.set_visible(not config['start_minimized'])
+        # Process events before starting the engine
+        # (to avoid display lag at window creation).
+        QCoreApplication.processEvents()
         # Start the engine.
         engine.start()
 
@@ -167,7 +176,7 @@ class MainWindow(QMainWindow, Ui_MainWindow, WindowState):
                 if manage_windows and previous_window is not None:
                     wmctrl.SetForegroundWindow(previous_window)
             dialog.finished.connect(on_finished)
-        dialog.show()
+        dialog.showNormal()
         dialog.activateWindow()
         dialog.raise_()
 
@@ -178,7 +187,7 @@ class MainWindow(QMainWindow, Ui_MainWindow, WindowState):
                               manage_windows=manage_windows)
 
     def _focus(self):
-        self.set_visible(True)
+        self.showNormal()
         self.activateWindow()
         self.raise_()
 
@@ -237,11 +246,11 @@ class MainWindow(QMainWindow, Ui_MainWindow, WindowState):
         self._configure()
 
     def on_open_config_folder(self):
-        if sys.platform.startswith('win'):
+        if PLATFORM == 'win':
             os.startfile(CONFIG_DIR)
-        elif sys.platform.startswith('linux'):
+        elif PLATFORM == 'linux':
             subprocess.call(['xdg-open', CONFIG_DIR])
-        elif sys.platform.startswith('darwin'):
+        elif PLATFORM == 'mac':
             subprocess.call(['open', CONFIG_DIR])
 
     def on_reconnect(self):

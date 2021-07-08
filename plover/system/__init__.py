@@ -21,11 +21,12 @@ def _load_wordlist(filename, assets_dir):
             break
     else:
         return {}
-    words = {}
     with open(path, encoding='utf-8') as f:
-        pairs = [word.strip().rsplit(' ', 1) for word in f]
-        pairs.sort(reverse=True, key=lambda x: int(x[1]))
-        words = {p[0]: int(p[1]) for p in pairs}
+        text = f.read()
+    fields = text.split()
+    it = iter(fields)
+    words = dict(zip(it, map(int, it)))
+    assert len(fields) == 2 * len(words), path + ' contains duplicate words.'
     return words
 
 def _key_order(keys, numbers):
@@ -60,12 +61,15 @@ _EXPORTS = {
     'DEFAULT_DICTIONARIES'     : lambda mod: mod.DEFAULT_DICTIONARIES,
 }
 
-def setup(system_name):
+def setup(system_name, system_mod=None, system_dict=None):
     system_symbols = {}
-    mod = registry.get_plugin('system', system_name).obj
+    if system_mod is None:
+        system_mod = registry.get_plugin('system', system_name).obj
     for symbol, init in _EXPORTS.items():
-        system_symbols[symbol] = init(mod)
+        system_symbols[symbol] = init(system_mod)
     system_symbols['NAME'] = system_name
-    globals().update(system_symbols)
+    if system_dict is None:
+        system_dict = globals()
+    system_dict.update(system_symbols)
 
 NAME = None
